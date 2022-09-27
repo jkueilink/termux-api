@@ -100,6 +100,7 @@ public class BatteryStatusAPI {
                 BatteryManager batteryManager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
 
                 out.beginObject();
+		out.name("jack").value(9999);
                 out.name("health").value(batteryHealth);
                 out.name("percentage").value(batteryPercentage);
                 out.name("plugged").value(batteryPlugged);
