@@ -1,0 +1,8 @@
+## Photo API Function Flow Diagram
+```mermaid
+graph TD
+onReceive --> takePicture
+takePicture --> proceedWithOpenedCamera
+proceedWithOpenedCamera --> correctOrientation
+correctOrientation --> saveImage
+```

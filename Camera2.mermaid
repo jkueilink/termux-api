@@ -1,0 +1,44 @@
+## Camera2 Flow Diagram
+```mermaid
+graph TD
+
+subgraph Activity
+    direction TB
+    OnResume
+    OnPause 
+end
+
+OnResume --> SurfaceTextureListener
+OnPause --> closeCamera
+
+subgraph TextureView
+    SurfaceTextureListener --> 
+    setCameraOutput --> 
+    configuresTransform
+end
+
+SurfaceTextureListener --> setupCameraId
+
+subgraph Camera
+    direction TB
+    setupCameraId --> 
+    startBackgroundThread --> 
+    openCamera -->
+    createPreviewSession -->
+    startPreview -->
+    closeCamera -->
+    stopBackendThread
+
+end
+
+subgraph Callback
+    CameraStateOpen[CameraDevice.StateCallback.onOpen]
+    CameraStateConfigured[CameraDevice.StateCallback.onConfigured]
+end
+
+openCamera --> CameraStateOpen
+CameraStateOpen --> createPreviewSession
+createPreviewSession --> CameraStateConfigured
+CameraStateConfigured --> startPreview
+
+```

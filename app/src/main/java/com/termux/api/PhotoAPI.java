@@ -37,6 +37,8 @@ import java.util.Objects;
 public class PhotoAPI {
 
     static void onReceive(TermuxApiReceiver apiReceiver, final Context context, Intent intent) {
+        TermuxApiLogger.info("JK onReceive() ");
+
         final String filePath = intent.getStringExtra("file");
         final File outputFile = new File(filePath);
         final File outputDir = outputFile.getParentFile();
@@ -52,6 +54,8 @@ public class PhotoAPI {
     }
 
     private static void takePicture(final PrintWriter stdout, final Context context, final File outputFile, String cameraId) {
+        TermuxApiLogger.info("JK takePicture() ");
+
         try {
             final CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
@@ -62,6 +66,7 @@ public class PhotoAPI {
             manager.openCamera(cameraId, new CameraDevice.StateCallback() {
                 @Override
                 public void onOpened(final CameraDevice camera) {
+                    TermuxApiLogger.info("onOpened() from camera");
                     try {
                         proceedWithOpenedCamera(context, manager, camera, outputFile, looper, stdout);
                     } catch (Exception e) {
@@ -73,6 +78,7 @@ public class PhotoAPI {
                 @Override
                 public void onDisconnected(CameraDevice camera) {
                     TermuxApiLogger.info("onDisconnected() from camera");
+                    closeCamera(camera, looper);
                 }
 
                 @Override
@@ -88,21 +94,113 @@ public class PhotoAPI {
         }
     }
 
+    static List<Surface> outputSurfaces;
+    static ImageReader mImageReader;
+    static Surface imageReaderSurface;
+
     // See answer on http://stackoverflow.com/questions/31925769/pictures-with-camera2-api-are-really-dark
     // See https://developer.android.com/reference/android/hardware/camera2/CameraDevice.html#createCaptureSession(java.util.List<android.view.Surface>, android.hardware.camera2.CameraCaptureSession.StateCallback, android.os.Handler)
     // for information about guaranteed support for output sizes and formats.
     static void proceedWithOpenedCamera(final Context context, final CameraManager manager, final CameraDevice camera, final File outputFile, final Looper looper, final PrintWriter stdout) throws CameraAccessException, IllegalArgumentException {
-        final List<Surface> outputSurfaces = new ArrayList<>();
+        TermuxApiLogger.info("JK proceedWithOpenedCamera() ");
+
+        //final List<Surface> outputSurfaces = new ArrayList<>();
+        outputSurfaces = new ArrayList<>();
 
         final CameraCharacteristics characteristics = manager.getCameraCharacteristics(camera.getId());
 
         int autoExposureMode = CameraMetadata.CONTROL_AE_MODE_OFF;
         for (int supportedMode : characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES)) {
             if (supportedMode == CameraMetadata.CONTROL_AE_MODE_ON) {
+                TermuxApiLogger.info("JK proceedWithOpenedCamera AE_MODE_ON ");
                 autoExposureMode = supportedMode;
             }
         }
         final int autoExposureModeFinal = autoExposureMode;
+
+        Integer awbModes[] = characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
+        TermuxApiLogger.info("JK proceedWithOpenedCamera AWB_MODES: length=" + String.valueOf(awbModes.length));
+        if (awbModes.length == 0 || (awbModes.length==1 && awbModes[0]==CameraMetadata.CONTROL_AWB_MODE_OFF)) {
+            TermuxApiLogger.info("JK proceedWithOpenedCamera awbModes NOT supported. awbModes.length=" + String.valueOf(awbModes.length) );
+        } else {
+            for (int supportedMode : awbModes) {
+                switch(supportedMode) {
+                    case CameraMetadata.CONTROL_AWB_MODE_OFF:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_OFF");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_AUTO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_AUTO");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_INCANDESCENT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_INCANDESCENT");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_WARM_FLUORESCENT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_WARM_FLUORESCENT");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_FLUORESCENT");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_DAYLIGHT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_DAYLIGHT");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_CLOUDY_DAYLIGHT");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_TWILIGHT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_TWILIGHT");
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_SHADE:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_SHADE");
+                        break;
+                    default:
+                        TermuxApiLogger.error("JK proceedWithOpenedCamera Unknown CONTROL_AWB Code: " + String.valueOf(supportedMode));
+                        break;
+                };
+            }    
+        }
+        final Integer[] awbModesFinal = awbModes;
+        TermuxApiLogger.info("\n");
+
+        int autoFocusMode = CameraMetadata.CONTROL_AF_MODE_OFF;
+        Integer afModes[] = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+        TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODES: length=" + String.valueOf(afModes.length));
+        if (afModes.length == 0 || (afModes.length==1 && afModes[0]==CameraMetadata.CONTROL_AF_MODE_OFF)) {
+            TermuxApiLogger.info("JK proceedWithOpenedCamera afModes NOT supported. afModes.length=" + String.valueOf(afModes.length) );
+        } else {
+            for (int supportedMode : afModes) {
+                switch(supportedMode) {
+                    case CameraMetadata.CONTROL_AF_MODE_OFF:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_OFF");
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_AUTO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_AUTO");
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_MACRO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_MACRO");
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_COTINUOUS_PICTURE");
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_COTINUOUS_VIDEO");
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_EDOF:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_EDOF");
+                        break;
+                    default:
+                        TermuxApiLogger.error("JK proceedWithOpenedCamera Unknown CONTROL_AF Code: " + String.valueOf(supportedMode));
+                        break;
+                };
+                autoFocusMode = supportedMode;
+                // if (supportedMode == CameraMetadata.CONTROL_AE_MODE_ON) {
+                //     TermuxApiLogger.info("JK proceedWithOpenedCamera AE_MODE_ON ");
+                //     autoExposureMode = supportedMode;
+                // }
+            }    
+        }
+        final Integer[] autoFocusModesFinal = afModes;
+        TermuxApiLogger.info("\n");
+
 
         // Use largest available size:
         StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -113,10 +211,12 @@ public class PhotoAPI {
         List<Size> sizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
         Size largest = Collections.max(sizes, bySize);
 
-        final ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
+        //final ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
+        ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
         mImageReader.setOnImageAvailableListener(reader -> new Thread() {
             @Override
             public void run() {
+                TermuxApiLogger.info("JK image available");
                 try (final Image mImage = reader.acquireNextImage()) {
                     ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
                     byte[] bytes = new byte[buffer.remaining()];
@@ -127,50 +227,97 @@ public class PhotoAPI {
                         stdout.println("Error writing image: " + e.getMessage());
                         TermuxApiLogger.error("Error writing image", e);
                     } finally {
-                        closeCamera(camera, looper);
+                        //TermuxApiLogger.info("JK closeCamera setOnImageAvailable");
+                        //closeCamera(camera, looper);
                     }
+                } finally {
+                    mImageReader.close();
+                    releaseSurfaces(outputSurfaces);
+                    closeCamera(camera, looper);
                 }
             }
         }.start(), null);
-        final Surface imageReaderSurface = mImageReader.getSurface();
+        //final Surface imageReaderSurface = mImageReader.getSurface();
+        imageReaderSurface = mImageReader.getSurface();
         outputSurfaces.add(imageReaderSurface);
 
         // create a dummy PreviewSurface
-        SurfaceTexture previewTexture = new SurfaceTexture(1);
-        Surface dummySurface = new Surface(previewTexture);
-        outputSurfaces.add(dummySurface);
+        //SurfaceTexture previewTexture = new SurfaceTexture(1);
+        //Surface dummySurface = new Surface(previewTexture);
+        //outputSurfaces.add(dummySurface);
 
         camera.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
             @Override
             public void onConfigured(final CameraCaptureSession session) {
+                // create a dummy PreviewSurface
+                SurfaceTexture previewTexture = new SurfaceTexture(1);
+                Surface dummySurface = new Surface(previewTexture);
+                outputSurfaces.add(dummySurface);
                 try {
                     // create preview Request
                     CaptureRequest.Builder previewReq = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
                     previewReq.addTarget(dummySurface);
-                    previewReq.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                    if (Arrays.asList(autoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
+                        previewReq.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera use AF_MODE_CONTINUOUS_PICTURE");
+                    } else {
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUS_PICTURE NOT supported! " + Arrays.toString(autoFocusModesFinal));
+                        //TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUS_PICTURE NOT supported! ");
+                    }
                     previewReq.set(CaptureRequest.CONTROL_AE_MODE, autoExposureModeFinal);
 
+                    // TODO: Skip preview
+                    TermuxApiLogger.error("TODO: Skip preview");
+                    /*
                     // continous preview-capture for 1/2 second
                     session.setRepeatingRequest(previewReq.build(), null, null);
                     TermuxApiLogger.info("preview started");
                     Thread.sleep(500);
                     session.stopRepeating();
                     TermuxApiLogger.info("preview stoppend");
+                    */
+                    TermuxApiLogger.info("TODO: Relesae previewTexture, dummySurface");
                     previewTexture.release();
                     dummySurface.release();
 
+
+                    TermuxApiLogger.info("JK CaptureRequest.Builder");
                     final CaptureRequest.Builder jpegRequest = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+
                     // Render to our image reader:
+                    TermuxApiLogger.info("JK addTarget. Render to our image reader");
                     jpegRequest.addTarget(imageReaderSurface);
+
+
                     // Configure auto-focus (AF) and auto-exposure (AE) modes:
-                    jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                    TermuxApiLogger.info("JK AutoFocus. AutoExposure. ");
+                    // TODO: Need to check if AF_MODE_CONTINUOUS_PICTURE is supported
+                    //jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                    if (Arrays.asList(autoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
+                        jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera. jpegRequest use AF_MODE_CONTINUOUS_PICTURE");
+                    } else {
+                        jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera jpegRequest AF_MODE_CONTINUOUS_PICTURE NOT supported! Use AF_MODE_OFF");
+                    }
+
                     jpegRequest.set(CaptureRequest.CONTROL_AE_MODE, autoExposureModeFinal);
                     jpegRequest.set(CaptureRequest.JPEG_ORIENTATION, correctOrientation(context, characteristics));
 
                     saveImage(camera, session, jpegRequest.build());
+                    TermuxApiLogger.info("JK Sleep 1000");
+                    //Thread.sleep(1000);
                 } catch (Exception e) {
                     TermuxApiLogger.error("onConfigured() error in preview", e);
                     closeCamera(camera, looper);
+                    TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
+                    mImageReader.close();
+                    releaseSurfaces(outputSurfaces);
+                }  finally {
+                    // TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
+                    // mImageReader.close();
+                    // releaseSurfaces(outputSurfaces);
+                    // closeCamera(camera, looper);
                 }
             }
 
@@ -178,18 +325,24 @@ public class PhotoAPI {
             public void onConfigureFailed(CameraCaptureSession session) {
                 TermuxApiLogger.error("onConfigureFailed() error in preview");
                 closeCamera(camera, looper);
+                mImageReader.close();
+                releaseSurfaces(outputSurfaces);
             }
         }, null);
+        TermuxApiLogger.info("JK DONE proceedWithOpenedCamera() ");
     }
 
     static void saveImage(final CameraDevice camera, CameraCaptureSession session, CaptureRequest request) throws CameraAccessException {
+        TermuxApiLogger.info("JK saveImage() ");
+
         session.capture(request, new CameraCaptureSession.CaptureCallback() {
             @Override
             public void onCaptureCompleted(CameraCaptureSession completedSession, CaptureRequest request, TotalCaptureResult result) {
                 TermuxApiLogger.info("onCaptureCompleted()");
-                closeCamera(camera, null);
+                //closeCamera(camera, null);
             }
         }, null);
+        TermuxApiLogger.info("JK Done saveImage() ");
     }
 
     /**
@@ -197,6 +350,8 @@ public class PhotoAPI {
      * See https://developer.android.com/reference/android/hardware/Camera.html#setDisplayOrientation(int)
      */
     static int correctOrientation(final Context context, final CameraCharacteristics characteristics) {
+        TermuxApiLogger.info("JK correctOrientation() ");
+
         final Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
         final boolean isFrontFacing = lensFacing != null && lensFacing == CameraCharacteristics.LENS_FACING_FRONT;
         TermuxApiLogger.info((isFrontFacing ? "Using" : "Not using") + " a front facing camera.");
@@ -244,7 +399,15 @@ public class PhotoAPI {
         return jpegOrientation;
     }
 
+    static void releaseSurfaces(List<Surface> outputSurfaces) {
+        for (Surface outputSurface : outputSurfaces) {
+                    outputSurface.release();
+        }
+        TermuxApiLogger.info("surfaces released");
+    }
+        
     static void closeCamera(CameraDevice camera, Looper looper) {
+        TermuxApiLogger.info("JK closeCamera() ");
         try {
             camera.close();
         } catch (RuntimeException e) {
