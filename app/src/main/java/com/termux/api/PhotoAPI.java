@@ -13,10 +13,12 @@ import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.hardware.display.DisplayManager;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Looper;
 import android.util.Size;
+import android.view.Display;
 import android.view.Surface;
 import android.view.WindowManager;
 
@@ -235,7 +237,7 @@ public class PhotoAPI {
                         TermuxApiLogger.error("Error writing image", e);
                     }
                 } finally {
-                    TermuxApiLogger.info("JK TODO: Cleanup in imageAvailableListener");
+                    TermuxApiLogger.info("JK Cleanup in imageAvailableListener. close mImageReader");
                     //closeCamera(camera, looper);
                     mImageReader.close();
                     //releaseSurfaces(outputSurfaces);
@@ -279,8 +281,6 @@ public class PhotoAPI {
                     }
                     previewReq.set(CaptureRequest.CONTROL_AE_MODE, autoExposureModeFinal);
 
-                    // TODO: Skip preview
-                    //TermuxApiLogger.error("TODO: Skip preview");
                     // continous preview-capture for 1/2 second
                     session.setRepeatingRequest(previewReq.build(), null, null);
                     TermuxApiLogger.info("preview started");
@@ -326,9 +326,9 @@ public class PhotoAPI {
                     TermuxApiLogger.error("onConfigured() error in preview", e);
                     //closeCamera(camera, looper);
                     TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
+                    closeCamera(camera, looper);
                     mImageReader.close();
                     releaseSurfaces(outputSurfaces);
-                    closeCamera(camera, looper);
                 }  finally {
                     // TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
                     // mImageReader.close();
@@ -384,8 +384,12 @@ public class PhotoAPI {
             TermuxApiLogger.info("CameraCharacteristics didn't contain SENSOR_ORIENTATION. Assuming 0 degrees.");
             sensorOrientation = 0;
         }
-
+     
         int deviceOrientation;
+        // TODO: does this return the proper value when display is off?
+        //       This orientation is based upon the screen orientation of termux-app on the phone. Screen must be on to report properly.
+        //       If screen off, will report the default position(camera on top), even when the phone itself is sideways(camera on left)
+        //       Cant keep the screen on always on by long pressing on termux-app cli window -> more... -> Check "keep screen on"
         final int deviceRotation =
                 ((WindowManager) context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
         switch (deviceRotation) {
@@ -407,6 +411,18 @@ public class PhotoAPI {
                 deviceOrientation = 0;
         }
         TermuxApiLogger.info(String.format("Device orientation: %d degrees", deviceOrientation));
+
+        int configOrientation = context.getResources().getConfiguration().orientation;
+        TermuxApiLogger.info("JK configOrientation=" + String.valueOf(configOrientation));
+
+        boolean screenIsOn = false;
+        for (Display display : ((DisplayManager)context.getSystemService(Context.DISPLAY_SERVICE)).getDisplays()) {
+            if (display.getState() != Display.STATE_OFF) {
+                screenIsOn = true;
+            }
+        }
+        TermuxApiLogger.info("JK screenIsOn=" + String.valueOf(screenIsOn));
+
 
         int jpegOrientation;
         if (isFrontFacing) {
