@@ -118,7 +118,7 @@ public class PhotoAPI {
         }
         final int autoExposureModeFinal = autoExposureMode;
 
-        Integer awbModes[] = characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
+        int awbModes[] = characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
         TermuxApiLogger.info("JK proceedWithOpenedCamera AWB_MODES: length=" + String.valueOf(awbModes.length));
         if (awbModes.length == 0 || (awbModes.length==1 && awbModes[0]==CameraMetadata.CONTROL_AWB_MODE_OFF)) {
             TermuxApiLogger.info("JK proceedWithOpenedCamera awbModes NOT supported. awbModes.length=" + String.valueOf(awbModes.length) );
@@ -158,11 +158,11 @@ public class PhotoAPI {
                 };
             }    
         }
-        final Integer[] awbModesFinal = awbModes;
+        final int[] awbModesFinal = awbModes;
         TermuxApiLogger.info("\n");
 
         int autoFocusMode = CameraMetadata.CONTROL_AF_MODE_OFF;
-        Integer afModes[] = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+        int afModes[] = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
         TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODES: length=" + String.valueOf(afModes.length));
         if (afModes.length == 0 || (afModes.length==1 && afModes[0]==CameraMetadata.CONTROL_AF_MODE_OFF)) {
             TermuxApiLogger.info("JK proceedWithOpenedCamera afModes NOT supported. afModes.length=" + String.valueOf(afModes.length) );
@@ -198,7 +198,12 @@ public class PhotoAPI {
                 // }
             }    
         }
-        final Integer[] autoFocusModesFinal = afModes;
+        // Need to do this because Arrays.List().contain doesn't work as expected for int[], where it put the entire int[] as a single element
+        final Integer[] autoFocusModesFinal = new Integer[afModes.length];
+        int i = 0;
+        for (int value : afModes) {
+            autoFocusModesFinal[i++] = Integer.valueOf(value);
+        }
         TermuxApiLogger.info("\n");
 
 
@@ -231,12 +236,14 @@ public class PhotoAPI {
                         //closeCamera(camera, looper);
                     }
                 } finally {
+                    TermuxApiLogger.info("Cleanup in imageAvailableListener");
+                    closeCamera(camera, looper);
                     mImageReader.close();
                     releaseSurfaces(outputSurfaces);
-                    closeCamera(camera, looper);
                 }
             }
         }.start(), null);
+
         //final Surface imageReaderSurface = mImageReader.getSurface();
         imageReaderSurface = mImageReader.getSurface();
         outputSurfaces.add(imageReaderSurface);
@@ -276,7 +283,7 @@ public class PhotoAPI {
                     session.stopRepeating();
                     TermuxApiLogger.info("preview stoppend");
                     */
-                    TermuxApiLogger.info("TODO: Relesae previewTexture, dummySurface");
+                    TermuxApiLogger.info("TODO: Release previewTexture, dummySurface");
                     previewTexture.release();
                     dummySurface.release();
 
@@ -323,7 +330,8 @@ public class PhotoAPI {
 
             @Override
             public void onConfigureFailed(CameraCaptureSession session) {
-                TermuxApiLogger.error("onConfigureFailed() error in preview");
+                TermuxApiLogger.error("onConfigureFailed() error in preview. cleanup");
+                session.close();
                 closeCamera(camera, looper);
                 mImageReader.close();
                 releaseSurfaces(outputSurfaces);
@@ -339,6 +347,7 @@ public class PhotoAPI {
             @Override
             public void onCaptureCompleted(CameraCaptureSession completedSession, CaptureRequest request, TotalCaptureResult result) {
                 TermuxApiLogger.info("onCaptureCompleted()");
+                session.close();
                 //closeCamera(camera, null);
             }
         }, null);
