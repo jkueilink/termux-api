@@ -78,7 +78,7 @@ public class PhotoAPI {
                 @Override
                 public void onDisconnected(CameraDevice camera) {
                     TermuxApiLogger.info("JK onDisconnected() from camera. Cleanup");
-                    //closeCamera(camera, looper);
+                    closeCamera(camera, looper);
                     //mImageReader.close();
                     //releaseSurfaces(outputSurfaces);
                 }
@@ -321,11 +321,14 @@ public class PhotoAPI {
                     //TermuxApiLogger.info("JK Sleep 1000");
                     //Thread.sleep(1000);
                 } catch (Exception e) {
+                    // TODO: Should error handling be done in here or wait till onConfigureFailed()
+                    // TODO: This seems wrong to close camera in here. Maybe just close session??
                     TermuxApiLogger.error("onConfigured() error in preview", e);
-                    closeCamera(camera, looper);
+                    //closeCamera(camera, looper);
                     TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
                     mImageReader.close();
                     releaseSurfaces(outputSurfaces);
+                    closeCamera(camera, looper);
                 }  finally {
                     // TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
                     // mImageReader.close();
