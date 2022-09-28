@@ -236,9 +236,9 @@ public class PhotoAPI {
                     }
                 } finally {
                     TermuxApiLogger.info("JK TODO: Cleanup in imageAvailableListener");
-                    closeCamera(camera, looper);
+                    //closeCamera(camera, looper);
                     mImageReader.close();
-                    releaseSurfaces(outputSurfaces);
+                    //releaseSurfaces(outputSurfaces);
                 }
             }
         }.start(), null);
@@ -346,7 +346,7 @@ public class PhotoAPI {
                 //closeCamera(camera, looper);
                 //mImageReader.close();
                 //releaseSurfaces(outputSurfaces);
-                //closeCamera(camera, null);
+                closeCamera(camera, null);
             }
         }, null);
         //TermuxApiLogger.info("JK Done saveImage() ");
