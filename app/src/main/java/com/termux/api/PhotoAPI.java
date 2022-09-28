@@ -77,8 +77,10 @@ public class PhotoAPI {
 
                 @Override
                 public void onDisconnected(CameraDevice camera) {
-                    TermuxApiLogger.info("onDisconnected() from camera");
-                    closeCamera(camera, looper);
+                    TermuxApiLogger.info("JK onDisconnected() from camera. Cleanup");
+                    //closeCamera(camera, looper);
+                    //mImageReader.close();
+                    //releaseSurfaces(outputSurfaces);
                 }
 
                 @Override
@@ -94,9 +96,9 @@ public class PhotoAPI {
         }
     }
 
-    static List<Surface> outputSurfaces;
-    static ImageReader mImageReader;
-    static Surface imageReaderSurface;
+    //static List<Surface> outputSurfaces;
+    //static ImageReader mImageReader;
+    //static Surface imageReaderSurface;
 
     // See answer on http://stackoverflow.com/questions/31925769/pictures-with-camera2-api-are-really-dark
     // See https://developer.android.com/reference/android/hardware/camera2/CameraDevice.html#createCaptureSession(java.util.List<android.view.Surface>, android.hardware.camera2.CameraCaptureSession.StateCallback, android.os.Handler)
@@ -104,8 +106,8 @@ public class PhotoAPI {
     static void proceedWithOpenedCamera(final Context context, final CameraManager manager, final CameraDevice camera, final File outputFile, final Looper looper, final PrintWriter stdout) throws CameraAccessException, IllegalArgumentException {
         TermuxApiLogger.info("JK proceedWithOpenedCamera() ");
 
-        //final List<Surface> outputSurfaces = new ArrayList<>();
-        outputSurfaces = new ArrayList<>();
+        final List<Surface> outputSurfaces = new ArrayList<>();
+        //outputSurfaces = new ArrayList<>();
 
         final CameraCharacteristics characteristics = manager.getCameraCharacteristics(camera.getId());
 
@@ -216,8 +218,8 @@ public class PhotoAPI {
         List<Size> sizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
         Size largest = Collections.max(sizes, bySize);
 
-        //final ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
-        ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
+        final ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
+        //ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
         mImageReader.setOnImageAvailableListener(reader -> new Thread() {
             @Override
             public void run() {
@@ -231,12 +233,9 @@ public class PhotoAPI {
                     } catch (Exception e) {
                         stdout.println("Error writing image: " + e.getMessage());
                         TermuxApiLogger.error("Error writing image", e);
-                    } finally {
-                        //TermuxApiLogger.info("JK closeCamera setOnImageAvailable");
-                        //closeCamera(camera, looper);
                     }
                 } finally {
-                    TermuxApiLogger.info("Cleanup in imageAvailableListener");
+                    TermuxApiLogger.info("JK TODO: Cleanup in imageAvailableListener");
                     closeCamera(camera, looper);
                     mImageReader.close();
                     releaseSurfaces(outputSurfaces);
@@ -244,22 +243,18 @@ public class PhotoAPI {
             }
         }.start(), null);
 
-        //final Surface imageReaderSurface = mImageReader.getSurface();
-        imageReaderSurface = mImageReader.getSurface();
+        final Surface imageReaderSurface = mImageReader.getSurface();
+        //imageReaderSurface = mImageReader.getSurface();
         outputSurfaces.add(imageReaderSurface);
 
         // create a dummy PreviewSurface
-        //SurfaceTexture previewTexture = new SurfaceTexture(1);
-        //Surface dummySurface = new Surface(previewTexture);
-        //outputSurfaces.add(dummySurface);
+        SurfaceTexture previewTexture = new SurfaceTexture(1);
+        Surface dummySurface = new Surface(previewTexture);
+        outputSurfaces.add(dummySurface);
 
         camera.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
             @Override
             public void onConfigured(final CameraCaptureSession session) {
-                // create a dummy PreviewSurface
-                SurfaceTexture previewTexture = new SurfaceTexture(1);
-                Surface dummySurface = new Surface(previewTexture);
-                outputSurfaces.add(dummySurface);
                 try {
                     // create preview Request
                     CaptureRequest.Builder previewReq = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -274,18 +269,18 @@ public class PhotoAPI {
                     previewReq.set(CaptureRequest.CONTROL_AE_MODE, autoExposureModeFinal);
 
                     // TODO: Skip preview
-                    TermuxApiLogger.error("TODO: Skip preview");
-                    /*
+                    //TermuxApiLogger.error("TODO: Skip preview");
                     // continous preview-capture for 1/2 second
                     session.setRepeatingRequest(previewReq.build(), null, null);
                     TermuxApiLogger.info("preview started");
                     Thread.sleep(500);
                     session.stopRepeating();
                     TermuxApiLogger.info("preview stoppend");
-                    */
-                    TermuxApiLogger.info("TODO: Release previewTexture, dummySurface");
-                    previewTexture.release();
-                    dummySurface.release();
+
+                    //TODO: If release here, picture will not be taken
+                    //TermuxApiLogger.info("JK Release previewTexture, dummySurface");
+                    //previewTexture.release();
+                    //dummySurface.release();
 
 
                     TermuxApiLogger.info("JK CaptureRequest.Builder");
@@ -312,7 +307,7 @@ public class PhotoAPI {
                     jpegRequest.set(CaptureRequest.JPEG_ORIENTATION, correctOrientation(context, characteristics));
 
                     saveImage(camera, session, jpegRequest.build());
-                    TermuxApiLogger.info("JK Sleep 1000");
+                    //TermuxApiLogger.info("JK Sleep 1000");
                     //Thread.sleep(1000);
                 } catch (Exception e) {
                     TermuxApiLogger.error("onConfigured() error in preview", e);
@@ -341,17 +336,20 @@ public class PhotoAPI {
     }
 
     static void saveImage(final CameraDevice camera, CameraCaptureSession session, CaptureRequest request) throws CameraAccessException {
-        TermuxApiLogger.info("JK saveImage() ");
+        //TermuxApiLogger.info("JK saveImage() ");
 
         session.capture(request, new CameraCaptureSession.CaptureCallback() {
             @Override
             public void onCaptureCompleted(CameraCaptureSession completedSession, CaptureRequest request, TotalCaptureResult result) {
-                TermuxApiLogger.info("onCaptureCompleted()");
-                session.close();
+                TermuxApiLogger.info("onCaptureCompleted() Cleanup");
+                completedSession.close();
+                //closeCamera(camera, looper);
+                //mImageReader.close();
+                //releaseSurfaces(outputSurfaces);
                 //closeCamera(camera, null);
             }
         }, null);
-        TermuxApiLogger.info("JK Done saveImage() ");
+        //TermuxApiLogger.info("JK Done saveImage() ");
     }
 
     /**
@@ -423,6 +421,7 @@ public class PhotoAPI {
             TermuxApiLogger.info("Exception closing camera: " + e.getMessage());
         }
         if (looper != null) looper.quit();
+        TermuxApiLogger.info("JK Done closeCamera() ");
     }
 
 }
