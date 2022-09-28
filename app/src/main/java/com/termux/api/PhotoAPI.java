@@ -254,6 +254,17 @@ public class PhotoAPI {
 
         camera.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
             @Override
+            public void onClosed(final CameraCaptureSession session) {
+                try {
+                    TermuxApiLogger.info("JK CameraCaptureSession Closed");
+                    closeCamera(camera, looper);
+                    releaseSurfaces(outputSurfaces);
+                } catch (Exception e) {
+                    TermuxApiLogger.error("JK CameraCaptureSession Closed error.", e);
+                }
+            }
+
+            @Override
             public void onConfigured(final CameraCaptureSession session) {
                 try {
                     // create preview Request
@@ -346,7 +357,7 @@ public class PhotoAPI {
                 //closeCamera(camera, looper);
                 //mImageReader.close();
                 //releaseSurfaces(outputSurfaces);
-                closeCamera(camera, null);
+                //closeCamera(camera, null);
             }
         }, null);
         //TermuxApiLogger.info("JK Done saveImage() ");
