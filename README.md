@@ -1,5 +1,7 @@
 # Termux API
 
+Branch jkv0.47 is modified v0.47 to support android-5 phones
+
 [![Build status](https://github.com/termux/termux-api/workflows/Build/badge.svg)](https://github.com/termux/termux-api/actions)
 [![Join the chat at https://gitter.im/termux/termux](https://badges.gitter.im/termux/termux.svg)](https://gitter.im/termux/termux)
 
