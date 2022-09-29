@@ -234,9 +234,11 @@ public class PhotoAPI {
             default:
                 boolean exactMatchFound = false;
                 for (Size s : sizes) {
-                    if (s.equals(quality)) {
+                    //TermuxApiLogger.info("JK Compare: " + quality + " " + s.toString());
+                    if (quality.equals(s.toString())) {
                         exactMatchFound = true;
                         imageQualitySize = s;
+                        TermuxApiLogger.info("JK ImageQuality Used:[" + imageQualitySize.toString() + "]");
                         break;
                     }
                 }
@@ -244,6 +246,7 @@ public class PhotoAPI {
                     // Use largest as default if no match found
                     // imageQualitySize = Collections.max(sizes, bySize);
                     TermuxApiLogger.info("JK ImageQuality not found. desired:[" + quality +"]. Used:[" + imageQualitySize.toString() + "]");
+                    TermuxApiLogger.info("JK Supported Quality: " + sizes.toString());
                 }
                 break;
         }
