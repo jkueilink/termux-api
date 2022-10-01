@@ -28,6 +28,7 @@ import com.termux.api.util.TermuxApiLogger;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintWriter;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,22 +42,48 @@ public class PhotoAPI {
     static void onReceive(TermuxApiReceiver apiReceiver, final Context context, Intent intent) {
         TermuxApiLogger.info("JK onReceive() ");
 
-        final String filePath = intent.getStringExtra("file");
-        final File outputFile = new File(filePath);
-        final File outputDir = outputFile.getParentFile();
+        final String filePath = intent.getStringExtra("file");          // If filename is "-", then redirect output to stdout
+        final File outputFile;
+        if (filePath.endsWith("/-")) {
+            TermuxApiLogger.info("JK filePath is -. Use stdout as output. filepath=" + filePath);
+            outputFile = null;
+        } else {
+            TermuxApiLogger.info("JK filePath is: " + filePath);
+            outputFile = new File(filePath);
+        }
         final String cameraId = Objects.toString(intent.getStringExtra("camera"), "0");
         final String quality = Objects.toString(intent.getStringExtra("quality"), "max");
 
-        ResultReturner.returnData(apiReceiver, intent, stdout -> {
-            if (!(outputDir.isDirectory() || outputDir.mkdirs())) {
-                stdout.println("Not a folder (and unable to create it): " + outputDir.getAbsolutePath());
-            } else {
+        if (outputFile != null) {
+            // Output to file
+            ResultReturner.returnData(apiReceiver, intent, stdout -> {
+                if (outputFile != null) {
+                    final File outputDir = outputFile.getParentFile();
+                    if (!(outputDir.isDirectory() || outputDir.mkdirs())) {
+                        //stdout.println("Not a folder (and unable to create it): " + outputDir.getAbsolutePath());
+                        TermuxApiLogger.error("Not a folder (and unable to create it): " + outputDir.getAbsolutePath(), null);
+                        return;
+                    }
+                } 
                 takePicture(stdout, context, outputFile, cameraId, quality);
-            }
-        });
+            }); 
+        } else {
+            // Output to stdout
+            ResultReturner.returnData(apiReceiver, intent, new ResultReturner.BinaryOutput() {
+                @Override
+                public void writeResult(OutputStream stdout) throws Exception {
+                    try {
+                        takePicture(stdout, context, outputFile, cameraId, quality);
+                    } catch (Exception e) {
+                        TermuxApiLogger.error("Output binary data error: ", e);
+                    }   
+
+                }
+            });
+        }
     }
 
-    private static void takePicture(final PrintWriter stdout, final Context context, final File outputFile, String cameraId, String quality) {
+    private static void takePicture(final Object stdout, final Context context, final File outputFile, String cameraId, String quality) {
         TermuxApiLogger.info("JK takePicture() ");
 
         try {
@@ -106,7 +133,7 @@ public class PhotoAPI {
     // See answer on http://stackoverflow.com/questions/31925769/pictures-with-camera2-api-are-really-dark
     // See https://developer.android.com/reference/android/hardware/camera2/CameraDevice.html#createCaptureSession(java.util.List<android.view.Surface>, android.hardware.camera2.CameraCaptureSession.StateCallback, android.os.Handler)
     // for information about guaranteed support for output sizes and formats.
-    static void proceedWithOpenedCamera(final Context context, final CameraManager manager, final CameraDevice camera, final File outputFile, final Looper looper, final PrintWriter stdout, String quality) throws CameraAccessException, IllegalArgumentException {
+    static void proceedWithOpenedCamera(final Context context, final CameraManager manager, final CameraDevice camera, final File outputFile, final Looper looper, final Object stdout, String quality) throws CameraAccessException, IllegalArgumentException {
         TermuxApiLogger.info("JK proceedWithOpenedCamera() ");
 
         final List<Surface> outputSurfaces = new ArrayList<>();
@@ -251,8 +278,10 @@ public class PhotoAPI {
                 break;
         }
 
-
-        final ImageReader mImageReader = ImageReader.newInstance(imageQualitySize.getWidth(), imageQualitySize.getHeight(), ImageFormat.JPEG, 2);
+        // MAX_IMAGES determines the maximum number of Image objects that can be acquired from the ImageReader simultaneously.
+        //            Once the maximum images has obtained by the user, the user need to release the image before a new image becomes available.
+        final int MAX_IMAGES = 2;
+        final ImageReader mImageReader = ImageReader.newInstance(imageQualitySize.getWidth(), imageQualitySize.getHeight(), ImageFormat.JPEG, MAX_IMAGES);
         //ImageReader mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, 2);
         mImageReader.setOnImageAvailableListener(reader -> new Thread() {
             @Override
@@ -262,11 +291,31 @@ public class PhotoAPI {
                     ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
                     byte[] bytes = new byte[buffer.remaining()];
                     buffer.get(bytes);
-                    try (FileOutputStream output = new FileOutputStream(outputFile)) {
-                        output.write(bytes);
-                    } catch (Exception e) {
-                        stdout.println("Error writing image: " + e.getMessage());
-                        TermuxApiLogger.error("Error writing image", e);
+                    if (outputFile != null) {
+                        TermuxApiLogger.info("JK Send image to file");
+                        try (FileOutputStream output = new FileOutputStream(outputFile)) {
+                            output.write(bytes);
+                        } catch (Exception e) {
+                            //stdout.println("Error writing image: " + e.getMessage());
+                            TermuxApiLogger.error("Error writing file image", e);
+                        }
+                    } else {
+                        // Send image to stdout                        
+                        TermuxApiLogger.info("JK Send image to stdout length=" + bytes.length);
+                        try {
+                            // ResultReturner.BinaryOutput in v0.50 supports binary output
+                            ((OutputStream)stdout).write(bytes);
+                        } catch (Exception e) {
+                            TermuxApiLogger.error("Error stdout file image", e);
+                        }
+                        // // TODO: Send to file for debugging
+                        // File outputTestFile = new File("/data/data/com.termux/files/home/testtest.jpg");
+                        // try (FileOutputStream output = new FileOutputStream(outputTestFile)) {
+                        //     output.write(bytes);
+                        // } catch (Exception e) {
+                        //     //stdout.println("Error writing image: " + e.getMessage());
+                        //     TermuxApiLogger.error("Error writing test file image", e);
+                        // }
                     }
                 } finally {
                     TermuxApiLogger.info("JK Cleanup in imageAvailableListener. close mImageReader");
