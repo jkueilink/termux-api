@@ -16,7 +16,6 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.hardware.display.DisplayManager;
 import android.media.Image;
 import android.media.ImageReader;
-import android.os.Handler;
 import android.os.Looper;
 import android.util.Size;
 import android.view.Display;
@@ -31,7 +30,6 @@ import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,8 +48,9 @@ public class PhotoAPI {
         }
     };
 
-    static boolean isDone = false;
+    static boolean isDone;
     final static long MAX_WAIT_TIME_MS = 15000;
+    //static boolean isPreviewDone;
 
 
     static void onReceive(TermuxApiReceiver apiReceiver, final Context context, Intent intent) {
@@ -178,103 +177,24 @@ public class PhotoAPI {
 
         final CameraCharacteristics characteristics = manager.getCameraCharacteristics(camera.getId());
 
-        int autoExposureMode = CameraMetadata.CONTROL_AE_MODE_OFF;
-        for (int supportedMode : characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES)) {
-            if (supportedMode == CameraMetadata.CONTROL_AE_MODE_ON) {
-                TermuxApiLogger.info("JK proceedWithOpenedCamera AE_MODE_ON ");
-                autoExposureMode = supportedMode;
-            }
-        }
-        final int autoExposureModeFinal = autoExposureMode;
-
-        int awbModes[] = characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
-        TermuxApiLogger.info("JK proceedWithOpenedCamera AWB_MODES: length=" + String.valueOf(awbModes.length));
-        if (awbModes.length == 0 || (awbModes.length==1 && awbModes[0]==CameraMetadata.CONTROL_AWB_MODE_OFF)) {
-            TermuxApiLogger.info("JK proceedWithOpenedCamera awbModes NOT supported. awbModes.length=" + String.valueOf(awbModes.length) );
-        } else {
-            for (int supportedMode : awbModes) {
-                switch(supportedMode) {
-                    case CameraMetadata.CONTROL_AWB_MODE_OFF:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_OFF");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_AUTO:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_AUTO");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_INCANDESCENT:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_INCANDESCENT");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_WARM_FLUORESCENT:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_WARM_FLUORESCENT");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_FLUORESCENT");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_DAYLIGHT:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_DAYLIGHT");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_CLOUDY_DAYLIGHT");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_TWILIGHT:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_TWILIGHT");
-                        break;
-                    case CameraMetadata.CONTROL_AWB_MODE_SHADE:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_SHADE");
-                        break;
-                    default:
-                        TermuxApiLogger.error("JK proceedWithOpenedCamera Unknown CONTROL_AWB Code: " + String.valueOf(supportedMode));
-                        break;
-                };
-            }    
-        }
-        final int[] awbModesFinal = awbModes;
+        // Hardware Level
+        final int hardwareLevelFinal = getHWLevel(characteristics);
         TermuxApiLogger.info("\n");
 
-        int autoFocusMode = CameraMetadata.CONTROL_AF_MODE_OFF;
-        int afModes[] = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
-        TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODES: length=" + String.valueOf(afModes.length));
-        if (afModes.length == 0 || (afModes.length==1 && afModes[0]==CameraMetadata.CONTROL_AF_MODE_OFF)) {
-            TermuxApiLogger.info("JK proceedWithOpenedCamera afModes NOT supported. afModes.length=" + String.valueOf(afModes.length) );
-        } else {
-            for (int supportedMode : afModes) {
-                switch(supportedMode) {
-                    case CameraMetadata.CONTROL_AF_MODE_OFF:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_OFF");
-                        break;
-                    case CameraMetadata.CONTROL_AF_MODE_AUTO:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_AUTO");
-                        break;
-                    case CameraMetadata.CONTROL_AF_MODE_MACRO:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_MACRO");
-                        break;
-                    case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_COTINUOUS_PICTURE");
-                        break;
-                    case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_COTINUOUS_VIDEO");
-                        break;
-                    case CameraMetadata.CONTROL_AF_MODE_EDOF:
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_EDOF");
-                        break;
-                    default:
-                        TermuxApiLogger.error("JK proceedWithOpenedCamera Unknown CONTROL_AF Code: " + String.valueOf(supportedMode));
-                        break;
-                };
-                autoFocusMode = supportedMode;
-                // if (supportedMode == CameraMetadata.CONTROL_AE_MODE_ON) {
-                //     TermuxApiLogger.info("JK proceedWithOpenedCamera AE_MODE_ON ");
-                //     autoExposureMode = supportedMode;
-                // }
-            }    
-        }
-        // Need to do this because Arrays.List().contain doesn't work as expected for int[], where it put the entire int[] as a single element
-        final Integer[] autoFocusModesFinal = new Integer[afModes.length];
-        int i = 0;
-        for (int value : afModes) {
-            autoFocusModesFinal[i++] = Integer.valueOf(value);
-        }
+        final Integer[] capsFinal = getCapabilities(characteristics);
         TermuxApiLogger.info("\n");
 
+        // AutoExposure        
+        final int autoExposureModeFinal = getAEMode(characteristics);
+        TermuxApiLogger.info("\n");
+
+        // AutoWhitening
+        final Integer[] awbModesFinal = getAWBModes(characteristics);
+        TermuxApiLogger.info("\n");
+
+        // AutoFocus
+        final Integer[] autoFocusModesFinal = getAFModes(characteristics);
+        TermuxApiLogger.info("\n");
 
         // Use largest available size:
         StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -406,7 +326,30 @@ public class PhotoAPI {
                     long timePreviewStarted = System.currentTimeMillis();
                     TermuxApiLogger.info("preview started " + System.currentTimeMillis());
                     // Don't want to kill the message loop with Thread.sleep()
-                    Thread.sleep(cameraProps.autoFocusTime);
+                    //Thread.sleep(cameraProps.autoFocusTime);
+                    // isPreviewDone = false;
+                    // new android.os.Handler().postDelayed(new Runnable() {
+                    //     public void run() {
+                    //         try {
+                    //             // Code to run after delayed time
+                    //             TermuxApiLogger.info("JK Handler().postDelayed() isPreviewDone=true " + System.currentTimeMillis());
+                    //         }
+                    //         catch (Exception e)
+                    //         {
+                    //             TermuxApiLogger.error("JK Handler().postDelayed() Error" + System.currentTimeMillis(), e);
+                    //         }
+                    //         isPreviewDone = true;
+                    //     }
+                    // }, cameraProps.autoFocusTime);
+                    
+                    while ((System.currentTimeMillis() - timePreviewStarted) < cameraProps.autoFocusTime) {
+                        Thread.yield();
+                    }        
+                                
+                    // while (!isPreviewDone) {
+                    //     Thread.yield();
+                    // }
+
                     session.stopRepeating();
                     TermuxApiLogger.info("preview stoppend " +  + System.currentTimeMillis());
                     TermuxApiLogger.info("preview elapsed ms= " +  (System.currentTimeMillis() - timePreviewStarted));
@@ -630,4 +573,209 @@ public class PhotoAPI {
         TermuxApiLogger.info("JK Done closeCamera() ");
     }
 
+    static int getHWLevel(CameraCharacteristics characteristics) {
+        int hwLevel = characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
+        switch(hwLevel) {
+            case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY:
+                TermuxApiLogger.info("INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY: " + String.valueOf(hwLevel));
+                break;
+            case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL:
+                TermuxApiLogger.info("INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL: " + String.valueOf(hwLevel));
+                break;
+            case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED:
+                TermuxApiLogger.info("INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED: " + String.valueOf(hwLevel));
+                break;
+            case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL:
+                TermuxApiLogger.info("INFO_SUPPORTED_HARDWARE_LEVEL_FULL: " + String.valueOf(hwLevel));
+                break;
+            case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3:
+                TermuxApiLogger.info("INFO_SUPPORTED_HARDWARE_LEVEL_3: " + String.valueOf(hwLevel));
+                break;
+            default:
+                TermuxApiLogger.info("Unknown hardware level: " + String.valueOf(hwLevel));
+                break;
+        }
+        return hwLevel;
+    }
+
+    static int getAEMode(CameraCharacteristics characteristics) {
+        int autoExposureMode = CameraMetadata.CONTROL_AE_MODE_OFF;
+        for (int supportedMode : characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES)) {
+            if (supportedMode == CameraMetadata.CONTROL_AE_MODE_ON) {
+                TermuxApiLogger.info("JK proceedWithOpenedCamera AE_MODE_ON ");
+                autoExposureMode = supportedMode;
+            }
+        }
+        return autoExposureMode;
+    }
+
+    static Integer[] getAWBModes(CameraCharacteristics characteristics) {
+        int awbModes[] = characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
+        Integer autoWhiteningBalanceModes[] = new Integer[awbModes.length];
+        TermuxApiLogger.info("JK proceedWithOpenedCamera AWB_MODES: length=" + String.valueOf(awbModes.length));
+        if (awbModes.length == 0 || (awbModes.length==1 && awbModes[0]==CameraMetadata.CONTROL_AWB_MODE_OFF)) {
+            TermuxApiLogger.info("JK proceedWithOpenedCamera awbModes NOT supported. awbModes.length=" + String.valueOf(awbModes.length) );
+        } else {
+            for (int i = 0; i < awbModes.length; i++ )
+            {
+                int supportedMode = awbModes[i];
+                switch(supportedMode) {
+                    case CameraMetadata.CONTROL_AWB_MODE_OFF:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_OFF: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_AUTO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_AUTO: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_INCANDESCENT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_INCANDESCENT: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_WARM_FLUORESCENT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_WARM_FLUORESCENT: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_FLUORESCENT: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_DAYLIGHT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_DAYLIGHT: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_CLOUDY_DAYLIGHT: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_TWILIGHT:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_TWILIGHT: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AWB_MODE_SHADE:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AWB_MODE_SHADE: " + String.valueOf(supportedMode));
+                        break;
+                    default:
+                        TermuxApiLogger.error("JK proceedWithOpenedCamera Unknown CONTROL_AWB Code: " + String.valueOf(supportedMode));
+                        break;
+                };
+                autoWhiteningBalanceModes[i] = supportedMode;
+            } 
+        }   
+        return autoWhiteningBalanceModes;
+    }
+
+    // Need to use Integer[] so can perform ArrayList.contain(). contain() doesn't work with native int[] because entire int[] becomes a single element for to List
+    static Integer[] getAFModes(CameraCharacteristics characteristics) {
+        int afModes[] = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+        final Integer[] autoFocusModes = new Integer[afModes.length];
+        TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODES: length=" + String.valueOf(afModes.length));
+        if (afModes.length == 0 || (afModes.length==1 && afModes[0]==CameraMetadata.CONTROL_AF_MODE_OFF)) {
+            TermuxApiLogger.info("JK proceedWithOpenedCamera afModes NOT supported. afModes.length=" + String.valueOf(afModes.length) );
+        } else {
+            for (int i=0; i < afModes.length; i++ ) {
+                int supportedMode = afModes[i];
+                switch(supportedMode) {
+                    case CameraMetadata.CONTROL_AF_MODE_OFF:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_OFF: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_AUTO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_AUTO: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_MACRO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_MACRO: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_COTINUOUS_PICTURE: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_COTINUOUS_VIDEO: " + String.valueOf(supportedMode));
+                        break;
+                    case CameraMetadata.CONTROL_AF_MODE_EDOF:
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera CONTROL_AF_MODE_EDOF: " + String.valueOf(supportedMode));
+                        break;
+                    default:
+                        TermuxApiLogger.error("JK proceedWithOpenedCamera Unknown CONTROL_AF Code: " + String.valueOf(supportedMode));
+                        break;
+                };
+                autoFocusModes[i] = supportedMode;
+            }    
+        }
+        return autoFocusModes;
+    }
+
+    // Need to use Integer[] so can perform ArrayList.contain(). contain() doesn't work with native int[] because entire int[] becomes a single element for to List
+    static Integer[] getCapabilities(CameraCharacteristics characteristics) {
+        int caps[] = characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
+        final Integer[] capabilities = new Integer[caps.length];
+        TermuxApiLogger.info("Capabilities: length=" + String.valueOf(caps.length));
+        if (caps.length == 0) {
+            TermuxApiLogger.info("JK No capabilities. caps.length=" + String.valueOf(caps.length) );
+        } else {
+            for (int i=0; i < caps.length; i++) {
+                int cap = caps[i];
+                switch(cap) {
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BURST_CAPTURE:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_BURST_CAPTURE: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_CONSTRAINED_HIGH_SPEED_VIDEO:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_CONSTRAINED_HIGH_SPEED_VIDEO: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT: " + String.valueOf(cap));
+                        break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_DYNAMIC_RANGE_TEN_BIT:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_DYNAMIC_RANGE_TEN_BIT");
+                    //     break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_POST_PROCESSING:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_MANUAL_POST_PROCESSING: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MONOCHROME:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_MONOCHROME: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MOTION_TRACKING:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_MOTION_TRACKING: " + String.valueOf(cap));
+                        break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_OFFLINE_PROCESSING:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_OFFLINE_PROCESSING");
+                    //     break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_PROCESSING:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_PROCESSING");
+                    //     break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_RAW:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_RAW: " + String.valueOf(cap));
+                        break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS: " + String.valueOf(cap));
+                        break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING");
+                    //     break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_SECURE_IMAGE_DATA:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_SECURE_IMAGE_DATA");
+                    //     break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE");
+                    //     break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_SYSTEM_CAMERA:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_SYSTEM_CAMERA");
+                    //     break;
+                    // case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR:
+                    //     TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR");
+                    //     break;
+                    case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING:
+                        TermuxApiLogger.info("REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING: " + String.valueOf(cap));
+                        break;
+                    default:
+                        TermuxApiLogger.error("JK proceedWithOpenedCamera Unknown Capabilities Code: " + String.valueOf(cap));
+                        break;
+                };
+                capabilities[i] = Integer.valueOf(cap);
+            }    
+        }
+        return capabilities;
+    }
+
 }
+
