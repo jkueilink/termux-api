@@ -11,11 +11,14 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.hardware.display.DisplayManager;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Size;
 import android.view.Display;
@@ -35,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class PhotoAPI {
@@ -48,16 +52,15 @@ public class PhotoAPI {
         }
     };
 
-    static boolean isDone;
+    static boolean isDone = false;
     final static long MAX_WAIT_TIME_MS = 15000;
-    //static boolean isPreviewDone;
-
+    static boolean isPreviewDone = false;
+    static long timePreviewStarted;
 
     static void onReceive(TermuxApiReceiver apiReceiver, final Context context, Intent intent) {
         isDone = false;
         TermuxApiLogger.info("JK onReceive() ");
         long startTime = System.currentTimeMillis();
-
 
         final String filePath = intent.getStringExtra("file");          // If filename is "-", then redirect output to stdout
         final File outputFile;
@@ -76,6 +79,8 @@ public class PhotoAPI {
         cameraProps.autoFocusTime = Integer.parseInt(autoFocusTime);
 
         TermuxApiLogger.info("JK Camera Properties: " + cameraProps);
+
+        startBackGroundThread();
 
         if (outputFile != null) {
             // Output to file
@@ -104,10 +109,13 @@ public class PhotoAPI {
                 }
             });
         }
+
+        TermuxApiLogger.info("JK Done Wait for isDone or timeout isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " startTime=" + startTime);
         while (!isDone && (System.currentTimeMillis() - startTime < MAX_WAIT_TIME_MS) ) {
             Thread.yield();
         }        
         TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
+        stopBackGroundThread();
         try {
             Thread.sleep(500);
         } catch (Exception e){
@@ -121,8 +129,9 @@ public class PhotoAPI {
         try {
             final CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
-            Looper.prepare();
-            final Looper looper = Looper.myLooper();
+            // Looper.prepare();
+            // final Looper looper = Looper.myLooper();
+            Looper looper = mBackgroundThread.getLooper();
 
             //noinspection MissingPermission
             manager.openCamera(cameraId, new CameraDevice.StateCallback() {
@@ -153,9 +162,17 @@ public class PhotoAPI {
                     closeCamera(camera, looper);
                     isDone = true;
                 }
-            }, null);
+            }, mBackgroundHandler);
 
-            Looper.loop();
+            // TermuxApiLogger.info("JK Before Looper.loop()");
+            // Looper.loop();
+            // TermuxApiLogger.info("JK After Looper.loop()");
+
+            // Waiting for exist
+            while (!isDone) {
+                Thread.yield();
+            }
+
         } catch (Exception e) {
             TermuxApiLogger.error("JK Error getting camera", e);
             isDone = true;
@@ -307,6 +324,7 @@ public class PhotoAPI {
 
             @Override
             public void onConfigured(final CameraCaptureSession session) {
+                TermuxApiLogger.info("JK CameraCaptureSession onConfigured");
                 try {
                     // create preview Request
                     CaptureRequest.Builder previewReq = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -319,11 +337,14 @@ public class PhotoAPI {
                         //TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUS_PICTURE NOT supported! ");
                     }
                     previewReq.set(CaptureRequest.CONTROL_AE_MODE, autoExposureModeFinal);
-
+    
                     // continous preview-capture for 1/2 second for autofocusing
-                    session.setRepeatingRequest(previewReq.build(), null, null);
+                    // TODO: Use mBackgroundHandler instead of null???
+                    //       Use previewCaptureCallback???
+                    session.setRepeatingRequest(previewReq.build(), previewCaptureCallback, mBackgroundHandler);
                     //TermuxApiLogger.info("preview started " + LocalDateTime.now());
-                    long timePreviewStarted = System.currentTimeMillis();
+                    timePreviewStarted = System.currentTimeMillis();
+                    isPreviewDone = false;
                     TermuxApiLogger.info("preview started " + System.currentTimeMillis());
                     // Don't want to kill the message loop with Thread.sleep()
                     //Thread.sleep(cameraProps.autoFocusTime);
@@ -342,32 +363,34 @@ public class PhotoAPI {
                     //     }
                     // }, cameraProps.autoFocusTime);
                     
-                    while ((System.currentTimeMillis() - timePreviewStarted) < cameraProps.autoFocusTime) {
+                    while (!isPreviewDone && (System.currentTimeMillis() - timePreviewStarted) < cameraProps.autoFocusTime) {
                         Thread.yield();
                     }        
+                    TermuxApiLogger.info("JK isPreviewDone=" + String.valueOf(isPreviewDone) + " elapsed ms= " +  (System.currentTimeMillis() - timePreviewStarted) + " autoFocusTime=" + cameraProps.autoFocusTime);
+                    TermuxApiLogger.info("JK abortCaptures " + System.currentTimeMillis());
+                    session.abortCaptures();
                                 
                     // while (!isPreviewDone) {
                     //     Thread.yield();
                     // }
 
-                    session.stopRepeating();
-                    TermuxApiLogger.info("preview stoppend " +  + System.currentTimeMillis());
-                    TermuxApiLogger.info("preview elapsed ms= " +  (System.currentTimeMillis() - timePreviewStarted));
-
+                    // TODO: Moved to preview capture handler
+                    //session.stopRepeating();
+                    //TermuxApiLogger.info("preview stoppend " +  + System.currentTimeMillis());
+                    //TermuxApiLogger.info("preview elapsed ms= " +  (System.currentTimeMillis() - timePreviewStarted));
+    
                     //TODO: If release here, picture will not be taken
                     //TermuxApiLogger.info("JK Release previewTexture, dummySurface");
                     //previewTexture.release();
                     //dummySurface.release();
-
-
+    
                     TermuxApiLogger.info("JK CaptureRequest.Builder");
                     final CaptureRequest.Builder jpegRequest = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-
+    
                     // Render to our image reader:
                     TermuxApiLogger.info("JK addTarget. Render to our image reader");
                     jpegRequest.addTarget(imageReaderSurface);
-
-
+    
                     // Configure auto-focus (AF) and auto-exposure (AE) modes:
                     TermuxApiLogger.info("JK AutoFocus. AutoExposure. ");
                     // TODO: Need to check if AF_MODE_CONTINUOUS_PICTURE is supported
@@ -379,13 +402,12 @@ public class PhotoAPI {
                         jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
                         TermuxApiLogger.info("JK proceedWithOpenedCamera jpegRequest AF_MODE_CONTINUOUS_PICTURE NOT supported! Use AF_MODE_OFF");
                     }
-
+    
                     jpegRequest.set(CaptureRequest.CONTROL_AE_MODE, autoExposureModeFinal);
                     jpegRequest.set(CaptureRequest.JPEG_ORIENTATION, correctOrientation(context, characteristics));
-
+    
                     saveImage(camera, session, jpegRequest.build());
-
-
+    
                     // new android.os.Handler().postDelayed(new Runnable() {
                     //     public void run() {
                     //         try {
@@ -452,7 +474,7 @@ public class PhotoAPI {
                     // mImageReader.close();
                     // releaseSurfaces(outputSurfaces);
                     // closeCamera(camera, looper);
-                }
+                }    
             }
 
             @Override
@@ -464,7 +486,61 @@ public class PhotoAPI {
                 releaseSurfaces(outputSurfaces);
             }
         }, null);
+
         TermuxApiLogger.info("JK DONE proceedWithOpenedCamera() ");
+    }
+
+    // Camera preview capture callback
+    private static CameraCaptureSession.CaptureCallback previewCaptureCallback = new CameraCaptureSession.CaptureCallback() {
+        // @Override
+        // private void process(CaptureResult result) {
+        //     TermuxApiLogger.info("JK previewCaptureCallback process");
+        // }
+
+        @Override
+        public void onCaptureProgressed(CameraCaptureSession session, CaptureRequest request, CaptureResult result) {
+            TermuxApiLogger.info("JK previewCaptureCallback onCaptureProgressed");
+        }
+
+        @Override
+        public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+            TermuxApiLogger.info("JK previewCaptureCallback onCaptureCompleted");
+            try {
+                TermuxApiLogger.info("preview stoppend " +  + System.currentTimeMillis());
+                TermuxApiLogger.info("preview elapsed ms= " +  (System.currentTimeMillis() - timePreviewStarted));
+                session.stopRepeating();
+
+                // TODO: Got runtime error
+                // Map<String, CaptureResult> results = result.getPhysicalCameraResults();
+                // for (String key : results.keySet()) {
+                //     TermuxApiLogger.info("PreviewCaptureResults ID: " + key + " " + String.valueOf(results.get(key)));
+                // }
+            } catch (Exception e) {
+                TermuxApiLogger.error("JK previewCaptureCallback onCaptureCompleted session.stopRepeating", e);
+            }
+            TermuxApiLogger.info("isPreviewDone=true");
+            isPreviewDone = true;
+        }
+    };
+
+    private static HandlerThread mBackgroundThread;
+    private static Handler mBackgroundHandler;
+
+    private static void startBackGroundThread() {
+        mBackgroundThread = new HandlerThread("CameraBackground");
+        mBackgroundThread.start();
+        mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
+    }
+
+    private static void stopBackGroundThread() {
+        mBackgroundThread.quitSafely();
+        try {
+            mBackgroundThread.join();
+            mBackgroundThread = null;
+            mBackgroundHandler = null;
+        } catch (Exception e) {
+            TermuxApiLogger.error("JK stopBackGroundThread() ", e);
+        }
     }
 
     static void saveImage(final CameraDevice camera, CameraCaptureSession session, CaptureRequest request) throws CameraAccessException {
