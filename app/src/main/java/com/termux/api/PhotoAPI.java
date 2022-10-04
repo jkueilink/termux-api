@@ -47,9 +47,11 @@ public class PhotoAPI {
     public static class CameraProperties {
         public String quality;
         public int autoFocusTime;
+        public int autoFocusMode;
+        public String autoFocusModeStr;
 
         public String toString() {
-            return String.format("quality=[%s] autoFocusTime=[%d]", quality, autoFocusTime);
+            return String.format("quality=[%s] autoFocusTime=[%d] autoFocusMode=[%d] autoFocusModeStr=[%s]", quality, autoFocusTime, autoFocusMode, autoFocusModeStr);
         }
     };
 
@@ -61,6 +63,7 @@ public class PhotoAPI {
     static long timePreviewStarted;
     private final static LinkedBlockingQueue<String> mQueue = new LinkedBlockingQueue<>(1);
     private static Looper mLooper = null;
+    private static CameraProperties mCameraProps = new CameraProperties();
 
     // Camera2 info
     static Context mContext;
@@ -133,11 +136,14 @@ public class PhotoAPI {
         }
         final String cameraId = Objects.toString(intent.getStringExtra("camera"), "0");
         final String autoFocusTime = Objects.toString(intent.getStringExtra("af_time"), "500");
+        final String autoFocusMode = Objects.toString(intent.getStringExtra("af_mode"), "contpic");
         final String quality = Objects.toString(intent.getStringExtra("quality"), "max");
-        final CameraProperties cameraProps = new CameraProperties();
+        mCameraProps = new CameraProperties();
+        final CameraProperties cameraProps = mCameraProps;
         cameraProps.quality = quality;
         cameraProps.autoFocusTime = Integer.parseInt(autoFocusTime);
-
+        cameraProps.autoFocusMode = convertAutoFocusModeString(autoFocusMode);
+        cameraProps.autoFocusModeStr = autoFocusMode;
         TermuxApiLogger.info("JK Camera Properties: " + cameraProps);
 
         startBackGroundThread();
@@ -487,12 +493,18 @@ public class PhotoAPI {
                     CaptureRequest.Builder previewReq = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
                     mPreviewReq = previewReq;
                     previewReq.addTarget(dummySurface);
-                    if (Arrays.asList(mAutoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
-                        previewReq.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera use AF_MODE_CONTINUOUS_PICTURE");
+
+                    if (cameraProps.autoFocusMode == CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE) {
+                        if (Arrays.asList(mAutoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
+                            previewReq.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                            TermuxApiLogger.info("JK proceedWithOpenedCamera use AF_MODE_CONTINUOUS_PICTURE");
+                        } else {
+                            TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUS_PICTURE NOT supported! " + Arrays.toString(mAutoFocusModesFinal));
+                            //TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUSf_PICTURE NOT supported! ");
+                        }
                     } else {
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUS_PICTURE NOT supported! " + Arrays.toString(mAutoFocusModesFinal));
-                        //TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUSf_PICTURE NOT supported! ");
+                        previewReq.set(CaptureRequest.CONTROL_AF_MODE, cameraProps.autoFocusMode);
+                        TermuxApiLogger.info("JK proceedWithOpenedCamera use custom mode: " + cameraProps.autoFocusModeStr);
                     }
                     previewReq.set(CaptureRequest.CONTROL_AE_MODE, mAutoExposureModeFinal);
     
@@ -619,6 +631,8 @@ public class PhotoAPI {
 
             CameraDevice camera = mCamera;
             CameraCaptureSession session = mSession;
+            final CameraProperties cameraProps = mCameraProps;
+
     
             TermuxApiLogger.info("JK CaptureRequest.Builder");
             final CaptureRequest.Builder jpegRequest = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
@@ -628,17 +642,21 @@ public class PhotoAPI {
             jpegRequest.addTarget(mImageReader.getSurface());
 
             // Configure auto-focus (AF) and auto-exposure (AE) modes:
-            TermuxApiLogger.info("JK AutoFocus. AutoExposure. ");
-            // TODO: Need to check if AF_MODE_CONTINUOUS_PICTURE is supported
-            //jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-            if (Arrays.asList(mAutoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
-                jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                TermuxApiLogger.info("JK captureStillPicture(). jpegRequest use AF_MODE_CONTINUOUS_PICTURE");
+            if (cameraProps.autoFocusMode == CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE) {
+                TermuxApiLogger.info("JK AutoFocus. AutoExposure. ");
+                // TODO: Need to check if AF_MODE_CONTINUOUS_PICTURE is supported
+                //jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                if (Arrays.asList(mAutoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
+                    jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                    TermuxApiLogger.info("JK captureStillPicture(). jpegRequest use AF_MODE_CONTINUOUS_PICTURE");
+                } else {
+                    jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
+                    TermuxApiLogger.info("JK captureStillPicture() jpegRequest AF_MODE_CONTINUOUS_PICTURE NOT supported! Use AF_MODE_OFF");
+                }
             } else {
-                jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
-                TermuxApiLogger.info("JK captureStillPicture() jpegRequest AF_MODE_CONTINUOUS_PICTURE NOT supported! Use AF_MODE_OFF");
+                TermuxApiLogger.info("JK AutoFocus. Custom mode: " + cameraProps.autoFocusModeStr);
+                jpegRequest.set(CaptureRequest.CONTROL_AF_MODE, cameraProps.autoFocusMode);
             }
-
             jpegRequest.set(CaptureRequest.CONTROL_AE_MODE, mAutoExposureModeFinal);
             jpegRequest.set(CaptureRequest.JPEG_ORIENTATION, correctOrientation(mContext, mCharacteristics));
 
@@ -1260,7 +1278,34 @@ public class PhotoAPI {
             JKcloseCamera();
         }
     }
-   
+
+    private static int convertAutoFocusModeString(String afModeStr) {
+        int afMode = CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE;
+        switch(afModeStr) {
+            case "off": 
+                afMode = CameraMetadata.CONTROL_AF_MODE_OFF;
+                break;
+            case "auto":
+                afMode = CameraMetadata.CONTROL_AF_MODE_AUTO;
+                break;
+            case "macro":
+                afMode = CameraMetadata.CONTROL_AF_MODE_MACRO;
+                break;
+            case "contpic":
+                afMode = CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE;
+                break;
+            case "contvid":
+                afMode = CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO;
+                break;
+            case "edof":
+                afMode = CameraMetadata.CONTROL_AF_MODE_EDOF;
+                break;
+            default:
+                TermuxApiLogger.info("Unknown AF Mode specified: [" + afModeStr + "]");
+                break;
+        }    
+        return afMode;
+    }
 }
 
 
