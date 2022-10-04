@@ -90,6 +90,9 @@ public class PhotoAPI {
     final static int STATE_TERMINATING = 6;
     static int mState = STATE_PREVIEW;
 
+    private static final String mFOCUS_LOCKED = "FOCUS_LOCKED";
+    private static final String mCOMPLETE = "DONE";
+
 
     static void initVars() {
         isPreviewDone = false;
@@ -169,22 +172,41 @@ public class PhotoAPI {
         }
 
         
-
         TermuxApiLogger.info("JK Done onReceive() WaitToExit" + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " startTime=" + startTime);
         try {
             TermuxApiLogger.info("JK mQueue.poll");
-            String val = mQueue.poll(MAX_WAIT_TIME_MS, TimeUnit.MILLISECONDS);
+            String val = mQueue.poll(cameraProps.autoFocusTime, TimeUnit.MILLISECONDS);
+            TermuxApiLogger.info("JK mQueue.poll val=" + val);
+            if (mFOCUS_LOCKED.equals(val)) {
+                TermuxApiLogger.info("JK Focus Locked captureStillPicture()");
+                mBackgroundHandler.post(new MyJKcaptureStillPicture());
+                long startCapture = System.currentTimeMillis();
+                val = mQueue.poll(5000, TimeUnit.MILLISECONDS);
+                TermuxApiLogger.info("JK Done mQueuePoll() FocusLocked MAX_WAIT_TIME_MS=5000 elapsed=" + (System.currentTimeMillis() - startCapture));
+            } else if (val == null) {
+                // val is null
+                TermuxApiLogger.info("JK No Focus Locked captureStillPicture()");
+                mBackgroundHandler.post(new MyJKcaptureStillPicture());
+                val = mQueue.poll(5000, TimeUnit.MILLISECONDS);
+            }
+
             TermuxApiLogger.info("JK mQueue.poll val=" + val);
             TermuxApiLogger.info("JK Done mQueuePoll() MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " elapsed=" + (System.currentTimeMillis() - startTime));
-            if (mBackgroundThread != null) {
-                 mBackgroundThread.join(2000);
-            }
             if (val == null) {
                 // Did not receive complete signal
+                TermuxApiLogger.info("JK Received null");
                 mState = STATE_TERMINATING;
                 closeSession();
                 JKcloseCamera();
+            } else if (val.equals(mCOMPLETE)) {
+                TermuxApiLogger.info("JK Received COMPLETE");
+                closeSession();
+                JKcloseCamera();
             }
+            if (mBackgroundThread != null) {
+                mBackgroundThread.join(2000);
+            }
+
             Thread.sleep(1000);
             stopBackGroundThread();
 
@@ -425,6 +447,7 @@ public class PhotoAPI {
                     mImageReader.close();
 
                     //releaseSurfaces(outputSurfaces);
+                    mState = STATE_PICTURE_TAKEN;
                 }
             }
         }.start(), null);
@@ -775,12 +798,14 @@ if (true) {
                 case STATE_WAITING_LOCK:
                     TermuxApiLogger.info("JK STATE_WAITING_LOCK");
                     if (afState == null)  {
-                        captureStillPicture();
+                        //captureStillPicture();
+                        signalFocusLocked();
                     } else if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) {
                         if (aeState == null || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
                             TermuxApiLogger.info("JK set STATE_PICTURE_TAKEN");
-                            mState = STATE_PICTURE_TAKEN;
-                            captureStillPicture();
+                            //mState = STATE_PICTURE_TAKEN;
+                            //captureStillPicture();
+                            signalFocusLocked();
                         }
                     }
                     break;
@@ -1251,15 +1276,34 @@ if (true) {
         return capabilities;
     }
 
+    private static void signalFocusLocked() {
+        try {
+            TermuxApiLogger.info("JK focusLocked put value");
+            mQueue.put(mFOCUS_LOCKED);
+        } catch (InterruptedException ie) {
+            TermuxApiLogger.error("JK focusLocked mQueue.put InterruptedException ", ie);
+        } catch (Exception e) {
+            TermuxApiLogger.error("JK focusLocked mQueue.put Exception ", e);
+        }                   
+    }
+
     private static void signalComplete() {
         try {
             TermuxApiLogger.info("JK signalShutdown put value");
-            mQueue.put("Done");
+            mQueue.put(mCOMPLETE);
         } catch (InterruptedException ie) {
             TermuxApiLogger.error("JK signalShutdown mQueue.put InterruptedException ", ie);
         } catch (Exception e) {
             TermuxApiLogger.error("JK signalShutdown mQueue.put Exception ", e);
         }                   
+    }
+
+    private static class MyJKcaptureStillPicture implements Runnable {
+        @Override
+        public void run() {
+            TermuxApiLogger.info("JK MyJKcaptureStillPicture run()");
+            captureStillPicture();
+        }
     }
 
     private static class MyJKcloseCamera implements Runnable {
