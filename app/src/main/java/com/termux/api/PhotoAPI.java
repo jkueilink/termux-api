@@ -151,7 +151,6 @@ public class PhotoAPI {
                 takePicture(stdout, context, outputFile, cameraId, cameraProps);
                 JKcloseCamera();
                 TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
-                //stopBackGroundThread();
             }); 
         } else {
             // Output to stdout
@@ -165,59 +164,66 @@ public class PhotoAPI {
                     }   
                     JKcloseCamera();
                     TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
-                    //stopBackGroundThread();
                 }
             });
         }
 
         
 
-        TermuxApiLogger.info("JK Done Wait for isDone or timeout isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " startTime=" + startTime);
-        // while (!isDone && (System.currentTimeMillis() - startTime < MAX_WAIT_TIME_MS) ) {
-        //     Thread.yield();
-        // }        
-        // TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
-        // try {
-        //     TermuxApiLogger.info("JK mQueue.poll");
-        //     String val = mQueue.poll(MAX_WAIT_TIME_MS, TimeUnit.MILLISECONDS);
-        //     TermuxApiLogger.info("JK mQueue.poll val=" + val);
-        //     TermuxApiLogger.info("JK Done mQueuePoll() MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " elapsed=" + (System.currentTimeMillis() - startTime));
-        // } catch (InterruptedException ie) {
-        //     TermuxApiLogger.error("JK mQueue.poll InterruptedException ", ie);f
-        // } catch (Exception e) {
-        //     TermuxApiLogger.error("JK mQueue.poll Exception ", e);
-        // }
-//TEST
-try {
-    TermuxApiLogger.info("JK TEST SLEEP 7000");
-    Thread.sleep(7000);
-    TermuxApiLogger.info("JK TEST DONE SLEEP 7000");
-    mState = STATE_TERMINATING;
-    closeSession();
-    JKcloseCamera();
-
-    Thread.sleep(3000);
-    stopBackGroundThread();
-
-    //mBackgroundHandler.post(new MyJKcloseCamera());
-} catch (Exception e) {
-    TermuxApiLogger.error("JK TEST exception: ", e);
- }
-
-
-
-
+        TermuxApiLogger.info("JK Done onReceive() WaitToExit" + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " startTime=" + startTime);
         try {
+            TermuxApiLogger.info("JK mQueue.poll");
+            String val = mQueue.poll(MAX_WAIT_TIME_MS, TimeUnit.MILLISECONDS);
+            TermuxApiLogger.info("JK mQueue.poll val=" + val);
+            TermuxApiLogger.info("JK Done mQueuePoll() MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " elapsed=" + (System.currentTimeMillis() - startTime));
             if (mBackgroundThread != null) {
-                mBackgroundThread.join(MAX_WAIT_TIME_MS);
-                JKcloseCamera();
-                stopBackGroundThread();
-                TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
-                Thread.sleep(500);
+                 mBackgroundThread.join(2000);
             }
-        } catch (Exception e){
-            TermuxApiLogger.error("JK onReceive error: ", e);
+            if (val == null) {
+                // Did not receive complete signal
+                mState = STATE_TERMINATING;
+                closeSession();
+                JKcloseCamera();
+            }
+            Thread.sleep(1000);
+            stopBackGroundThread();
+
+        } catch (InterruptedException ie) {
+            TermuxApiLogger.error("JK mQueue.poll InterruptedException ", ie);
+        } catch (Exception e) {
+            TermuxApiLogger.error("JK mQueue.poll Exception ", e);
         }
+// //TEST
+// try {
+//     TermuxApiLogger.info("JK TEST SLEEP 7000");
+//     Thread.sleep(7000);
+//     TermuxApiLogger.info("JK TEST DONE SLEEP 7000");
+//     mState = STATE_TERMINATING;
+//     closeSession();
+//     JKcloseCamera();
+
+//     Thread.sleep(3000);
+//     stopBackGroundThread();
+
+//     //mBackgroundHandler.post(new MyJKcloseCamera());
+// } catch (Exception e) {
+//     TermuxApiLogger.error("JK TEST exception: ", e);
+// }
+
+
+
+
+        // try {
+        //     if (mBackgroundThread != null) {
+        //         mBackgroundThread.join(MAX_WAIT_TIME_MS);
+        //         JKcloseCamera();
+        //         stopBackGroundThread();
+        //         TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
+        //         Thread.sleep(500);
+        //     }
+        // } catch (Exception e){
+        //     TermuxApiLogger.error("JK onReceive error: ", e);
+        // }
 
         TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
         
@@ -475,13 +481,15 @@ if (true) {
                     TermuxApiLogger.info("JKTEST CameraCaptureSession onReady() ==> STATE_DONE");
                     // session.close();
                     // mSession.close();
-                    mState = STATE_DONE; 
+                    mState = STATE_DONE;
+                    signalComplete(); 
                 }
                 if (mState == STATE_TERMINATING) {
                     //TermuxApiLogger.info("JK CameraCaptureSession onReady() mSession.close() mState=STATE_DONE");
                     TermuxApiLogger.info("JKTEST CameraCaptureSession onReady() STATE_TERMINATING");
                     // session.close();
                     closeSession();
+                    signalComplete();
                 }
 
             }
@@ -797,7 +805,7 @@ if (true) {
                         try {
                             TermuxApiLogger.info("STATE_DONE");
                             closeCamera(mCamera, null);
-                            signalShutdown();
+                            signalComplete();
                         } catch (Exception e) {
                             TermuxApiLogger.error("STATE_DONE Exception", e);
                         }
@@ -1243,7 +1251,7 @@ if (true) {
         return capabilities;
     }
 
-    private static void signalShutdown() {
+    private static void signalComplete() {
         try {
             TermuxApiLogger.info("JK signalShutdown put value");
             mQueue.put("Done");
