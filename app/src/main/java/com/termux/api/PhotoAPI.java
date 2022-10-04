@@ -180,34 +180,36 @@ public class PhotoAPI {
             if (mFOCUS_LOCKED.equals(val)) {
                 TermuxApiLogger.info("JK Focus Locked captureStillPicture()");
                 mBackgroundHandler.post(new MyJKcaptureStillPicture());
-                long startCapture = System.currentTimeMillis();
                 val = mQueue.poll(5000, TimeUnit.MILLISECONDS);
-                TermuxApiLogger.info("JK Done mQueuePoll() FocusLocked MAX_WAIT_TIME_MS=5000 elapsed=" + (System.currentTimeMillis() - startCapture));
+                TermuxApiLogger.info("JK Done FocusLocked captureStillPicture() mQueue poll elapsed=" + (System.currentTimeMillis() - startTime));
             } else if (val == null) {
                 // val is null
                 TermuxApiLogger.info("JK No Focus Locked captureStillPicture()");
                 mBackgroundHandler.post(new MyJKcaptureStillPicture());
                 val = mQueue.poll(5000, TimeUnit.MILLISECONDS);
+                TermuxApiLogger.info("JK Done No Focus Locked captureStillPicture() mQueue poll elapsed=" + (System.currentTimeMillis() - startTime));
             }
 
             TermuxApiLogger.info("JK mQueue.poll val=" + val);
-            TermuxApiLogger.info("JK Done mQueuePoll() MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " elapsed=" + (System.currentTimeMillis() - startTime));
+            TermuxApiLogger.info("JK onRecieve() mQueuePoll() MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " elapsed=" + (System.currentTimeMillis() - startTime));
             if (val == null) {
                 // Did not receive complete signal
-                TermuxApiLogger.info("JK Received null");
+                TermuxApiLogger.info("JK Received null signal. Terminating...");
                 mState = STATE_TERMINATING;
                 closeSession();
                 JKcloseCamera();
             } else if (val.equals(mCOMPLETE)) {
-                TermuxApiLogger.info("JK Received COMPLETE");
+                TermuxApiLogger.info("JK Received COMPLETE signal. Terminating...");
+                mState = STATE_TERMINATING;
                 closeSession();
                 JKcloseCamera();
             }
-            if (mBackgroundThread != null) {
-                mBackgroundThread.join(2000);
-            }
+            // if (mBackgroundThread != null) {
+            //     mBackgroundThread.join(2000);
+            // }
+            // TermuxApiLogger.info("JK onRecieve() mBackgroundThread.join() MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " elapsed=" + (System.currentTimeMillis() - startTime));
 
-            Thread.sleep(1000);
+            // Thread.sleep(1000);
             stopBackGroundThread();
 
         } catch (InterruptedException ie) {
@@ -215,49 +217,8 @@ public class PhotoAPI {
         } catch (Exception e) {
             TermuxApiLogger.error("JK mQueue.poll Exception ", e);
         }
-// //TEST
-// try {
-//     TermuxApiLogger.info("JK TEST SLEEP 7000");
-//     Thread.sleep(7000);
-//     TermuxApiLogger.info("JK TEST DONE SLEEP 7000");
-//     mState = STATE_TERMINATING;
-//     closeSession();
-//     JKcloseCamera();
-
-//     Thread.sleep(3000);
-//     stopBackGroundThread();
-
-//     //mBackgroundHandler.post(new MyJKcloseCamera());
-// } catch (Exception e) {
-//     TermuxApiLogger.error("JK TEST exception: ", e);
-// }
-
-
-
-
-        // try {
-        //     if (mBackgroundThread != null) {
-        //         mBackgroundThread.join(MAX_WAIT_TIME_MS);
-        //         JKcloseCamera();
-        //         stopBackGroundThread();
-        //         TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
-        //         Thread.sleep(500);
-        //     }
-        // } catch (Exception e){
-        //     TermuxApiLogger.error("JK onReceive error: ", e);
-        // }
 
         TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
-        
-
-        // try {
-        //     //closeCamera(mCamera, null);
-        //     stopBackGroundThread();
-        //     TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
-        //     Thread.sleep(500);
-        // } catch (Exception e){
-        //     TermuxApiLogger.error("JK onReceive error: ", e);
-        // }
     }
 
     private static void takePicture(final Object stdout, final Context context, final File outputFile, String cameraId, CameraProperties cameraProps) {
@@ -465,9 +426,6 @@ public class PhotoAPI {
         Surface dummySurface = mDummySurface;
         outputSurfaces.add(dummySurface);
 
-// TEST
-if (true) {
-    try {
         TermuxApiLogger.info("JK camera.createCaptureSession()");
         camera.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
             @Override
@@ -565,92 +523,84 @@ if (true) {
             }
         }, mBackgroundHandler);
 
-    }
-    catch(Exception e) {
-        TermuxApiLogger.error("****************************************************************JK Test exception", e);
-    }
-    return;
-}
+        // camera.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
+            // @Override
+            // public void onClosed(final CameraCaptureSession session) {
+            //     try {
+            //         TermuxApiLogger.info("JK CameraCaptureSession Closed");
+            //         closeCamera(camera, looper);
+            //         //releaseSurfaces(outputSurfaces);
+            //     } catch (Exception e) {
+            //         TermuxApiLogger.error("JK CameraCaptureSession Closed error.", e);
+            //     }
+            // }
+
+            // @Override
+            // public void onReady(final CameraCaptureSession session) {
+            //     TermuxApiLogger.info("JK CameraCaptureSession onReady");
+            //     if (mState == STATE_PICTURE_TAKEN) {
+            //         //TermuxApiLogger.info("JK CameraCaptureSession onReady() mSession.close() mState=STATE_DONE");
+            //         TermuxApiLogger.info("JK CameraCaptureSession onReady()");
+            //         // session.close();
+            //         // mSession.close();
+            //         mState = STATE_DONE;
+            //     }
+            // }
+
+            // @Override
+            // public void onConfigured(final CameraCaptureSession session) {
+            //     TermuxApiLogger.info("JK CameraCaptureSession onConfigured");
+            //     mSession = session;
+            //     try {
+            //         // create preview Request
+            //         CaptureRequest.Builder previewReq = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            //         mPreviewReq = previewReq;
+            //         previewReq.addTarget(dummySurface);
+            //         if (Arrays.asList(mAutoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
+            //             previewReq.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+            //             TermuxApiLogger.info("JK proceedWithOpenedCamera use AF_MODE_CONTINUOUS_PICTURE");
+            //         } else {
+            //             TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUS_PICTURE NOT supported! " + Arrays.toString(mAutoFocusModesFinal));
+            //             //TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUSf_PICTURE NOT supported! ");
+            //         }
+            //         previewReq.set(CaptureRequest.CONTROL_AE_MODE, mAutoExposureModeFinal);
     
-    
-        camera.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
-            @Override
-            public void onClosed(final CameraCaptureSession session) {
-                try {
-                    TermuxApiLogger.info("JK CameraCaptureSession Closed");
-                    closeCamera(camera, looper);
-                    //releaseSurfaces(outputSurfaces);
-                } catch (Exception e) {
-                    TermuxApiLogger.error("JK CameraCaptureSession Closed error.", e);
-                }
-            }
+            //         // continous preview-capture for 1/2 second for autofocusing
+            //         // TODO: Use mBackgroundHandler instead of null???
+            //         //       Use previewCaptureCallback???
+            //         session.setRepeatingRequest(previewReq.build(), previewCaptureCallback, mBackgroundHandler);
+            //         //TermuxApiLogger.info("preview started " + LocalDateTime.now());
+            //         timePreviewStarted = System.currentTimeMillis();
+            //         isPreviewDone = false;
+            //         TermuxApiLogger.info("preview started " + System.currentTimeMillis());
 
-            @Override
-            public void onReady(final CameraCaptureSession session) {
-                TermuxApiLogger.info("JK CameraCaptureSession onReady");
-                if (mState == STATE_PICTURE_TAKEN) {
-                    //TermuxApiLogger.info("JK CameraCaptureSession onReady() mSession.close() mState=STATE_DONE");
-                    TermuxApiLogger.info("JK CameraCaptureSession onReady()");
-                    // session.close();
-                    // mSession.close();
-                    mState = STATE_DONE;
-                }
-            }
+            //         TermuxApiLogger.info("JK DONE onConfigured()");
+            //     } catch (Exception e) {
+            //         // TODO: Should error handling be done in here or wait till onConfigureFailed()
+            //         // TODO: This seems wrong to close camera in here. Maybe just close session??
+            //         TermuxApiLogger.error("JK onConfigured() exception in preview", e);
+            //         //closeCamera(camera, looper);
+            //         TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
+            //         closeCamera(camera, looper);
+            //         //mImageReader.close();
+            //         //releaseSurfaces(outputSurfaces);
+            //     }  finally {
+            //         // TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
+            //         // mImageReader.close();
+            //         // releaseSurfaces(outputSurfaces);
+            //         // closeCamera(camera, looper);
+            //     }    
+            // }
 
-            @Override
-            public void onConfigured(final CameraCaptureSession session) {
-                TermuxApiLogger.info("JK CameraCaptureSession onConfigured");
-                mSession = session;
-                try {
-                    // create preview Request
-                    CaptureRequest.Builder previewReq = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-                    mPreviewReq = previewReq;
-                    previewReq.addTarget(dummySurface);
-                    if (Arrays.asList(mAutoFocusModesFinal).contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)) {
-                        previewReq.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera use AF_MODE_CONTINUOUS_PICTURE");
-                    } else {
-                        TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUS_PICTURE NOT supported! " + Arrays.toString(mAutoFocusModesFinal));
-                        //TermuxApiLogger.info("JK proceedWithOpenedCamera AF_MODE_CONTINUOUSf_PICTURE NOT supported! ");
-                    }
-                    previewReq.set(CaptureRequest.CONTROL_AE_MODE, mAutoExposureModeFinal);
-    
-                    // continous preview-capture for 1/2 second for autofocusing
-                    // TODO: Use mBackgroundHandler instead of null???
-                    //       Use previewCaptureCallback???
-                    session.setRepeatingRequest(previewReq.build(), previewCaptureCallback, mBackgroundHandler);
-                    //TermuxApiLogger.info("preview started " + LocalDateTime.now());
-                    timePreviewStarted = System.currentTimeMillis();
-                    isPreviewDone = false;
-                    TermuxApiLogger.info("preview started " + System.currentTimeMillis());
-
-                    TermuxApiLogger.info("JK DONE onConfigured()");
-                } catch (Exception e) {
-                    // TODO: Should error handling be done in here or wait till onConfigureFailed()
-                    // TODO: This seems wrong to close camera in here. Maybe just close session??
-                    TermuxApiLogger.error("JK onConfigured() exception in preview", e);
-                    //closeCamera(camera, looper);
-                    TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
-                    closeCamera(camera, looper);
-                    //mImageReader.close();
-                    //releaseSurfaces(outputSurfaces);
-                }  finally {
-                    // TermuxApiLogger.error("JK Release mImageReader, releaseSurface, closeCamera");
-                    // mImageReader.close();
-                    // releaseSurfaces(outputSurfaces);
-                    // closeCamera(camera, looper);
-                }    
-            }
-
-            @Override
-            public void onConfigureFailed(CameraCaptureSession session) {
-                TermuxApiLogger.error("JK onConfigureFailed() error in preview. cleanup");
-                session.close();
-                closeCamera(camera, looper);
-                //mImageReader.close();
-                //releaseSurfaces(outputSurfaces);
-            }
-        }, mBackgroundHandler);
+            // @Override
+            // public void onConfigureFailed(CameraCaptureSession session) {
+            //     TermuxApiLogger.error("JK onConfigureFailed() error in preview. cleanup");
+            //     session.close();
+            //     closeCamera(camera, looper);
+            //     //mImageReader.close();
+            //     //releaseSurfaces(outputSurfaces);
+            // }
+        // }, mBackgroundHandler);
 
         TermuxApiLogger.info("JK DONE proceedWithOpenedCamera() ");
     }
@@ -659,6 +609,11 @@ if (true) {
     private static void captureStillPicture() {
         TermuxApiLogger.info("JK captureStillPicture");
         try {
+            if (mCamera == null || mSession == null) {
+                TermuxApiLogger.info("JK ERROR captureStillPicture. Invalid mCamera or mSession. mCamera=" + mCamera + " mSession=" + mSession);
+                return;
+            }
+
             CameraDevice camera = mCamera;
             CameraCaptureSession session = mSession;
     
@@ -699,18 +654,20 @@ if (true) {
                 }
             };
 
-            TermuxApiLogger.info("JK captureStillPicture. stopRepeating() abortCaptures()");
+            TermuxApiLogger.info("JK ready to capture real picture stop previews. stopRepeating() abortCaptures()");
             mSession.stopRepeating();
-            mSession.abortCaptures();   
+            mSession.abortCaptures();
+            // Send image capture request
             mSession.capture(jpegRequest.build(), CaptureCallback, null);
             //mSession.capture(jpegRequest.build(), CaptureCallback, mBackgroundHandler);
-            TermuxApiLogger.info("JK Done captureStillPicture() ");
         } catch (Exception e) {
             TermuxApiLogger.error("JK captureStillPicture Exception. ",e);
         }
 
+        TermuxApiLogger.info("JK Done captureStillPicture() ");
     }
 
+    // Auto Focus. Send unlock focus.
     private static void unlockFocus() {
         try {
             TermuxApiLogger.info("JK UnlockFocus.");
@@ -722,6 +679,7 @@ if (true) {
         }
     }
 
+    // Auto Focus. Send lock focus command.
     private static void lockFocus() {
         try {
             mPreviewReq.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
@@ -735,6 +693,7 @@ if (true) {
 
     // Camera preview capture callback
     private static CameraCaptureSession.CaptureCallback previewCaptureCallback = new CameraCaptureSession.CaptureCallback() {
+        // Process CaptureResult from the callbacks from the Camera2 API engine
         private void process(CaptureResult result) {
              //TermuxApiLogger.info("JK previewCaptureCallback process");
              Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
@@ -849,31 +808,11 @@ if (true) {
 
         @Override
         public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
-            TermuxApiLogger.info("JK previewCaptureCallback onCaptureCompleted process");
             if (session != mSession) {
                 TermuxApiLogger.info("JK previewCaptureCallback onCaptureCompleted session!=mSession");
             }
-
-            try {
-                process(result);
-                //TermuxApiLogger.info("preview stoppend " +  + System.currentTimeMillis());
-                //TermuxApiLogger.info("preview elapsed ms= " +  (System.currentTimeMillis() - timePreviewStarted));
-
-// TODO: Test                
-                //session.stopRepeating();
-
-                // TODO: Got runtime error
-                // Map<String, CaptureResult> results = result.getPhysicalCameraResults();
-                // for (String key : results.keySet()) {
-                //     TermuxApiLogger.info("PreviewCaptureResults ID: " + key + " " + String.valueOf(results.get(key)));
-                // }
-            } catch (Exception e) {
-                TermuxApiLogger.error("JK previewCaptureCallback onCaptureCompleted session", e);
-            }
-
-//TODO Test            
-//            TermuxApiLogger.info("isPreviewDone=true");
-//            isPreviewDone = true;
+            TermuxApiLogger.info("JK previewCaptureCallback onCaptureCompleted process");
+            process(result);
         }
     };
 
