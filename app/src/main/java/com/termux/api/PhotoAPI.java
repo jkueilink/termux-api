@@ -55,7 +55,8 @@ public class PhotoAPI {
 
     // Internal flag
     static boolean isDone = false;
-    final static long MAX_WAIT_TIME_MS = 15000;
+    final static long MAX_WAIT_TIME_MS = 20000;                // Maximum wait time for the entire process
+    final static long MAX_BG_QUEUE_WAIT_TIME_MS = 10000;       // Maximum wait time for terminating background handlerthread
     static boolean isPreviewDone = false;
     static long timePreviewStarted;
     private final static LinkedBlockingQueue<String> mQueue = new LinkedBlockingQueue<>(1);
@@ -88,6 +89,7 @@ public class PhotoAPI {
     final static int STATE_PICTURE_TAKEN = 4;
     final static int STATE_DONE = 5;
     final static int STATE_TERMINATING = 6;
+    final static int STATE_FOCUS_LOCKED = 7;
     static int mState = STATE_PREVIEW;
 
     private static final String mFOCUS_LOCKED = "FOCUS_LOCKED";
@@ -153,7 +155,7 @@ public class PhotoAPI {
                 } 
                 takePicture(stdout, context, outputFile, cameraId, cameraProps);
                 JKcloseCamera();
-                TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
+                TermuxApiLogger.info("JK Done onReceive() ResultReturner.returnData isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
             }); 
         } else {
             // Output to stdout
@@ -166,7 +168,7 @@ public class PhotoAPI {
                         TermuxApiLogger.error("Output binary data error: ", e);
                     }   
                     JKcloseCamera();
-                    TermuxApiLogger.info("JK Done onReceive() isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
+                    TermuxApiLogger.info("JK Done onReceive() ResultReturner.returnData isDone=" + String.valueOf(isDone) + " MAX_WAIT_TIME_MS=" + MAX_WAIT_TIME_MS  + " " + (System.currentTimeMillis() - startTime));
                 }
             });
         }
@@ -204,6 +206,7 @@ public class PhotoAPI {
                 closeSession();
                 JKcloseCamera();
             }
+
             // if (mBackgroundThread != null) {
             //     mBackgroundThread.join(2000);
             // }
@@ -767,6 +770,10 @@ public class PhotoAPI {
                             signalFocusLocked();
                         }
                     }
+                    mState = STATE_FOCUS_LOCKED;
+                    break;
+                case STATE_FOCUS_LOCKED:
+                    TermuxApiLogger.info("STATE_FOCUS_LOCKED");
                     break;
                 case STATE_PICTURE_TAKEN:
                     TermuxApiLogger.info("STATE_PICTURE_TAKEN");
@@ -830,12 +837,13 @@ public class PhotoAPI {
             return;
         }
 
+        long startStopQ = System.currentTimeMillis();
         boolean isQuitSafely = mBackgroundThread.quitSafely();
         TermuxApiLogger.info("JK stopBackGroundThread quitSafely. isQuitSafely=" + String.valueOf(isQuitSafely));
         try {
-            TermuxApiLogger.info("JK stopBackGroundThread before join" + mBackgroundThread);
-            mBackgroundThread.join(MAX_WAIT_TIME_MS);
-            TermuxApiLogger.info("JK stopBackGroundThread after join" + mBackgroundThread);
+            TermuxApiLogger.info("JK stopBackGroundThread before join" + mBackgroundThread + " elapsed=" + (System.currentTimeMillis() - startStopQ));
+            mBackgroundThread.join(MAX_BG_QUEUE_WAIT_TIME_MS);
+            TermuxApiLogger.info("JK stopBackGroundThread after join" + mBackgroundThread + " elapsed=" + (System.currentTimeMillis() - startStopQ));
             mBackgroundThread = null;
             mBackgroundHandler = null;
             TermuxApiLogger.info("JK setBackGroundThread to null");
